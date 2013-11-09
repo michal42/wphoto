@@ -30,7 +30,7 @@ static int upnp_web_getinfo(const char *filename,
 	info->last_modified = time(NULL);
 	info->is_directory = 0;
 	info->is_readable = 1;
-	info->content_type = ixmlCloneDOMString("text/plain");
+	info->content_type = ixmlCloneDOMString("text/xml");
 	return UPNP_E_SUCCESS;
 }
 
