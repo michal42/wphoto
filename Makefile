@@ -1,6 +1,7 @@
 all: wphoto
 
-CFLAGS = $(shell pkg-config --cflags libupnp)
+CFLAGS = -g -Wall $(shell pkg-config --cflags libupnp)
 LDFLAGS = $(shell pkg-config --libs libupnp)
-wphoto: wphoto.c
-	$(CC) $(CFLAGS) $(LDFLAGS) wphoto.c -o wphoto
+wphoto: wphoto.o xml.o
+	$(CC) $(LDFLAGS) $^ -o wphoto
+
