@@ -38,11 +38,6 @@ int main(int argc, char **argv)
 
 	snprintf(descurl, sizeof(descurl), "http://%s:%d/%s",
 			server_ip, server_port, desc_xml);
-	if (init_xml_docs() < 0) {
-		printf("init_xml_docs error: %d\n", ret);
-		UpnpFinish();
-		return 1;
-	}
 	if (web_init() < 0) {
 		printf("web_init error\n");
 		UpnpFinish();

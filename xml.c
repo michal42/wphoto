@@ -6,6 +6,42 @@
 #include "wphoto.h"
 
 char *xml_MobileDevDesc;
+char *xml_CameraConnectedMobile =
+"<?xml version=\"1.0\"?>\n"
+"<scpd xmlns=\"urn:schemas-upnp-org:service-1-0\">\n"
+"	<specVersion>\n"
+"		<major>1</major>\n"
+"		<minor>0</minor>\n"
+"	</specVersion>\n"
+"	<actionList xmlns:ns=\"urn:schemas-canon-com:schema-imink\">\n"
+"		<action>\n"
+"			<name>GetObjRecvCapability</name>\n"
+"			<ns:X_actKind>Get</X_actKind>\n"
+"			<ns:X_resourceName>ObjRecvCapability</X_resourceName>\n"
+"		</action>\n"
+"		<action>\n"
+"			<name>SetUsecaseStatus</name>\n"
+"			<ns:X_actKind>Set</X_actKind>\n"
+"			<ns:X_resourceName>UsecaseStatus</X_resourceName>\n"
+"		</action>\n"
+"		<action>\n"
+"			<name>SetSendObjInfo</name>\n"
+"			<ns:X_actKind>Set</X_actKind>\n"
+"			<ns:X_resourceName>SendObjInfo</X_resourceName>\n"
+"		</action>\n"
+"		<action>\n"
+"			<name>SetObjData</name>\n"
+"			<ns:X_actKind>Set</X_actKind>\n"
+"			<ns:X_resourceName>ObjData</X_resourceName>\n"
+"		</action>\n"
+"		<action>\n"
+"			<name>SetMovieExtProperty</name>\n"
+"			<ns:X_actKind>Set</X_actKind>\n"
+"			<ns:X_resourceName>MovieExtProperty</X_resourceName>\n"
+"		</action>\n"
+"	</actionList>\n"
+"</scpd>\n";
+
 /* TODO */
 const char *uuid = "uuid:00000000-0000-0000-0000-123456789DEA";
 
