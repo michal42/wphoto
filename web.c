@@ -80,9 +80,9 @@ int web_init(void)
 {
 	int ret;
 
-	ret = UpnpSetWebServerRootDir("web");
+	ret = UpnpEnableWebserver(TRUE);
 	if (ret != UPNP_E_SUCCESS) {
-		printf("UpnpSetWebServerRootDir error: %d\n", ret);
+		printf("UpnpEnableWebserver error: %d\n", ret);
 		UpnpFinish();
 		return 1;
 	}
