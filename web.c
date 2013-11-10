@@ -10,11 +10,12 @@
 struct url_mapping {
 	const char *url;
 	const char *doc;
+	size_t len;
 };
 
 static struct url_mapping url_maps[3];
 
-static const char * resolve_get_url(const char *url)
+static const struct url_mapping * resolve_get_url(const char *url)
 {
 	const struct url_mapping *map;
 	const char *q;
@@ -25,7 +26,7 @@ static const char * resolve_get_url(const char *url)
 		if (strncmp(map->url, url, q - url) == 0)
 			break;
 	}
-	return map->doc;
+	return map;
 }
 
 static int upnp_web_getinfo(const char *filename,
@@ -36,10 +37,12 @@ static int upnp_web_getinfo(const char *filename,
 #endif
 		)
 {
+	const struct url_mapping *map;
+
 	fprintf(stderr, "upnp_web_getinfo(\"%s\")\n", filename);
-	if (!resolve_get_url(filename))
+	if (!(map = resolve_get_url(filename)))
 		return UPNP_E_FILE_NOT_FOUND;
-	info->file_length = -1;
+	info->file_length = map->len;
 	info->last_modified = time(NULL);
 	info->is_directory = 0;
 	info->is_readable = 1;
@@ -56,19 +59,19 @@ static UpnpWebFileHandle upnp_web_open(const char *filename,
 					enum UpnpOpenFileMode mode)
 {
 	struct my_filehandle *res;
-	const char *doc;
+	const struct url_mapping *map;
 
 	fprintf(stderr, "upnp_web_open(\"%s\", %d)\n", filename, mode);
 	if (mode != UPNP_READ)
 		return NULL;
-	doc = resolve_get_url(filename);
-	if (!doc)
+	map = resolve_get_url(filename);
+	if (!map)
 		return NULL;
 	res = malloc(sizeof *res);
 	if (!res)
 		return NULL;
-	res->doc = doc;
-	res->len = strlen(doc);
+	res->doc = map->doc;
+	res->len = map->len;
 	res->pos = 0;
 	return res;
 }
@@ -101,7 +104,7 @@ int upnp_web_close(UpnpWebFileHandle file)
 
 int web_init(void)
 {
-	int ret;
+	int i, ret;
 
 	if (init_xml_docs() < 0) {
 		printf("init_xml_docs error");
@@ -113,6 +116,8 @@ int web_init(void)
 	url_maps[1].doc = xml_CameraConnectedMobile;
 	url_maps[2].url = NULL;
 	url_maps[2].doc = NULL;
+	for (i = 0; i < 2; i++)
+		url_maps[i].len = strlen(url_maps[i].doc);
 
 	ret = UpnpEnableWebserver(TRUE);
 	if (ret != UPNP_E_SUCCESS) {
