@@ -18,18 +18,18 @@ static int upnp_event_handler(Upnp_EventType type, void *event,
 
 
 UpnpDevice_Handle device_handle = -1;
+UpnpClient_Handle client_handle = -1;
 
 int main(int argc, char **argv)
 {
-	int ret;
+	int ret = 1, err;
 	char descurl[256];
 	const char *desc_xml = "MobileDevDesc.xml";
 
-	ret = UpnpInit(NULL, 0);
-	if (ret != UPNP_E_SUCCESS) {
-		printf("UpnpInit error: %d\n", ret);
-		UpnpFinish();
-		return 1;
+	err = UpnpInit(NULL, 0);
+	if (err != UPNP_E_SUCCESS) {
+		printf("UpnpInit error: %d\n", err);
+		goto err_init;
 	}
 	server_ip = UpnpGetServerIpAddress();
 	server_port = UpnpGetServerPort();
@@ -40,26 +40,36 @@ int main(int argc, char **argv)
 			server_ip, server_port, desc_xml);
 	if (web_init() < 0) {
 		printf("web_init error\n");
-		UpnpFinish();
-		return 1;
+		goto err_init;
 	}
-	ret = UpnpRegisterRootDevice(descurl, upnp_event_handler,
+	err = UpnpRegisterRootDevice(descurl, upnp_event_handler,
 			&device_handle, &device_handle);
-	if (ret != UPNP_E_SUCCESS) {
-		printf("UpnpRegisterRootDevice error: %d\n", ret);
-		UpnpFinish();
-		return 1;
+	if (err != UPNP_E_SUCCESS) {
+		printf("UpnpRegisterRootDevice error: %d\n", err);
+		goto err_init;
 	}
-	ret = UpnpSendAdvertisement(device_handle, 0);
-	if (ret != UPNP_E_SUCCESS) {
-		printf("UpnpSendAdvertisement error: %d\n", ret);
-		UpnpUnRegisterRootDevice(device_handle);
-		UpnpFinish();
-		return 1;
+	err = UpnpRegisterClient(upnp_event_handler,
+			&client_handle, &client_handle);
+	if (err != UPNP_E_SUCCESS) {
+		printf("UpnpRegisterClient error: %d\n", err);
+		goto err_register;
+	}
+	err = UpnpSendAdvertisement(device_handle, 0);
+	if (err != UPNP_E_SUCCESS) {
+		printf("UpnpSendAdvertisement error: %d\n", err);
+		goto err_register;
+	}
+	err = UpnpSearchAsync(client_handle, 5, "urn:schemas-canon-com:service:MobileConnectedCameraService:1", (void*)42);
+	if (err != UPNP_E_SUCCESS) {
+		printf("UpnpSearchAsync error: %d\n", err);
+		goto err_register;
 	}
 	sleep(100);
+	ret = 0;
+err_register:
 	UpnpUnRegisterRootDevice(device_handle);
+err_init:
 	UpnpFinish();
-	return 0;
+	return ret;
 }
 
