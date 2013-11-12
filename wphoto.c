@@ -1,3 +1,4 @@
+#include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -12,13 +13,15 @@ int server_port;
 static int upnp_event_handler(Upnp_EventType type, void *event,
 		void *cookie)
 {
-	fprintf(stderr, "event: %d\n", type);
+	fprintf(stderr, "event: %d, %p, %p\n", type, event, cookie);
 	return 0;
 }
 
 
 UpnpDevice_Handle device_handle = -1;
 UpnpClient_Handle client_handle = -1;
+struct stat dummy_st;
+#define MARK(x) do { stat((x), &dummy_st); } while (0)
 
 int main(int argc, char **argv)
 {
@@ -54,7 +57,9 @@ int main(int argc, char **argv)
 		printf("UpnpRegisterClient error: %d\n", err);
 		goto err_register;
 	}
+	MARK("/x1");
 	err = UpnpSendAdvertisement(device_handle, 0);
+	MARK("/x2");
 	if (err != UPNP_E_SUCCESS) {
 		printf("UpnpSendAdvertisement error: %d\n", err);
 		goto err_register;
@@ -65,11 +70,14 @@ int main(int argc, char **argv)
 		goto err_register;
 	}
 	sleep(100);
+	MARK("/x3");
 	ret = 0;
 err_register:
 	UpnpUnRegisterRootDevice(device_handle);
+	MARK("/x4");
 err_init:
 	UpnpFinish();
+	MARK("/x5");
 	return ret;
 }
 
