@@ -5,3 +5,7 @@ LDFLAGS = $(shell pkg-config --libs libupnp)
 wphoto: wphoto.o xml.o web.o
 	$(CC) $(LDFLAGS) $^ -o wphoto
 
+clean:
+	rm -f wphoto *.o
+
+.PHONY: all clean
