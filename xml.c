@@ -42,9 +42,6 @@ char *xml_CameraConnectedMobile =
 "	</actionList>\n"
 "</scpd>\n";
 
-/* TODO */
-const char *uuid = "uuid:00000000-0000-0000-0000-123456789DEA";
-
 int append(char **doc, size_t *pos, size_t *alloc, const char *string)
 {
 	size_t len = strlen(string);
@@ -115,7 +112,7 @@ int init_xml_docs(void)
 "<modelDescription>wphoto</modelDescription>\n"
 "<modelName>n/a</modelName>\n"
 "<UDN>");
-	AP(uuid);
+	AP(device_uuid);
 	AP(
 "</UDN>\n"
 "<serviceList>\n"

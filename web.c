@@ -8,22 +8,36 @@
 #include "wphoto.h"
 
 struct url_mapping {
-	const char *url;
-	const char *doc;
-	size_t len;
-};
+	struct url_mapping *next;
+	const char *path;
+	web_callback callback;
+	void *data;
+} *url_maps;
 
-static struct url_mapping url_maps[3];
+int web_add_callback(const char *path, web_callback callback, void *data)
+{
+	struct url_mapping *new;
 
-static const struct url_mapping * resolve_get_url(const char *url)
+	new = malloc(sizeof *new);
+	if (!new)
+		return -1;
+	new->path = path;
+	new->callback = callback;
+	new->data = data;
+	new->next = url_maps;
+	url_maps = new;
+	return 0;
+}
+
+static const struct url_mapping * get_url_map(const char *url)
 {
 	const struct url_mapping *map;
 	const char *q;
 
 	if (!(q = strchr(url, '?')))
 		q = strchr(url, '\0');
-	for (map = url_maps; map->url; map++) {
-		if (strncmp(map->url, url, q - url) == 0)
+	for (map = url_maps; map; map = map->next) {
+		if (strncmp(map->path, url, q - url) == 0)
 			break;
 	}
 	return map;
@@ -40,9 +54,9 @@ static int upnp_web_getinfo(const char *filename,
 	const struct url_mapping *map;
 
 	fprintf(stderr, "upnp_web_getinfo(\"%s\")\n", filename);
-	if (!(map = resolve_get_url(filename)))
+	if (!(map = get_url_map(filename)))
 		return UPNP_E_FILE_NOT_FOUND;
-	info->file_length = map->len;
+	info->file_length = -1;
 	info->last_modified = time(NULL);
 	info->is_directory = 0;
 	info->is_readable = 1;
@@ -60,18 +74,25 @@ static UpnpWebFileHandle upnp_web_open(const char *filename,
 {
 	struct my_filehandle *res;
 	const struct url_mapping *map;
+	const char *doc, *query;
 
 	fprintf(stderr, "upnp_web_open(\"%s\", %d)\n", filename, mode);
 	if (mode != UPNP_READ)
 		return NULL;
-	map = resolve_get_url(filename);
+	map = get_url_map(filename);
 	if (!map)
+		return NULL;
+	query = strchr(filename, '?');
+	if (query)
+		query++;
+	doc = map->callback(map->data, query);
+	if (!doc)
 		return NULL;
 	res = malloc(sizeof *res);
 	if (!res)
 		return NULL;
-	res->doc = map->doc;
-	res->len = map->len;
+	res->doc = doc;
+	res->len = strlen(doc);
 	res->pos = 0;
 	return res;
 }
@@ -102,22 +123,9 @@ int upnp_web_close(UpnpWebFileHandle file)
 	return UPNP_E_SUCCESS;
 }
 
-int web_init(void)
+int web_start(void)
 {
-	int i, ret;
-
-	if (init_xml_docs() < 0) {
-		printf("init_xml_docs error");
-		return -1;
-	}
-	url_maps[0].url = "/MobileDevDesc.xml";
-	url_maps[0].doc = xml_MobileDevDesc;
-	url_maps[1].url = "/desc_iml/CameraConnectedMobile.xml";
-	url_maps[1].doc = xml_CameraConnectedMobile;
-	url_maps[2].url = NULL;
-	url_maps[2].doc = NULL;
-	for (i = 0; i < 2; i++)
-		url_maps[i].len = strlen(url_maps[i].doc);
+	int ret;
 
 	ret = UpnpEnableWebserver(TRUE);
 	if (ret != UPNP_E_SUCCESS) {
