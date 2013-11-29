@@ -69,7 +69,7 @@ int main(int argc, char **argv)
 		printf("UpnpSearchAsync error: %d\n", err);
 		goto err_register;
 	}
-	sleep(100);
+	sleep(300);
 	MARK("/x3");
 	ret = 0;
 err_register:
