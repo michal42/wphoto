@@ -1,4 +1,3 @@
-#include <sys/stat.h>
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
@@ -99,9 +98,6 @@ static const char *web_CameraConnectedMobile(void *data, const char *query)
 	return xml_CameraConnectedMobile;
 }
 
-struct stat dummy_st;
-#define MARK(x) do { stat((x), &dummy_st); } while (0)
-
 int wphoto_upnp_handshake(void)
 {
 	int ret = -1, err;
@@ -164,9 +160,7 @@ int wphoto_upnp_handshake(void)
 	camera_found_save = 0;
 	do {
 		int wait_err;
-		MARK("/x1");
 		err = UpnpSendAdvertisement(device_handle, 0);
-		MARK("/x2");
 		if (err != UPNP_E_SUCCESS) {
 			printf("UpnpSendAdvertisement error: %d\n", err);
 			goto err_register;
@@ -201,9 +195,7 @@ wait:
 	ret = 0;
 err_register:
 	UpnpUnRegisterRootDevice(device_handle);
-	MARK("/x4");
 err_init:
 	UpnpFinish();
-	MARK("/x5");
 	return ret;
 }
