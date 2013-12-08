@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
@@ -16,14 +17,15 @@ static UpnpClient_Handle client_handle = -1;
 
 /*
  * This is used to signal the main thread of stage changes of the device
- * or client. The mutex protects all the three flag variables.
+ * or client. The mutex protects all the three variables.
  */
 ithread_mutex_t state_mutex;
 ithread_cond_t state_cond;
-/* client discovery found a camera */
-int camera_found;
+/* URL of the discovered camera device */
+char *camera_url;
 /* camera issued a GET request to our device */
 int camera_responded;
+/* M-SEARCH timed out */
 int discovery_timeout;
 
 #define ADVERTISEMENT_INTERVAL 3
@@ -47,15 +49,13 @@ static int upnp_client_event_handler(Upnp_EventType type, void *event,
 {
 	struct Upnp_Discovery *devent = event;
 
-	/* ignore our own advertisements */
+	/* ignore devices other than the camera */
 	switch (type) {
 	case UPNP_DISCOVERY_ADVERTISEMENT_ALIVE:
 	case UPNP_DISCOVERY_ADVERTISEMENT_BYEBYE:
 	case UPNP_DISCOVERY_SEARCH_RESULT:
-		if (strcmp(devent->DeviceId, device_uuid) == 0) {
-			// printf("Ignoring own advertisement\n");
+		if (strcmp(devent->ServiceType, CAMERA_SERVICE_NAME) != 0)
 			return 0;
-		}
 		break;
 	default:
 		;
@@ -69,18 +69,21 @@ static int upnp_client_event_handler(Upnp_EventType type, void *event,
 		ithread_mutex_unlock(&state_mutex);
 		break;
 	case UPNP_DISCOVERY_ADVERTISEMENT_ALIVE:
-	case UPNP_DISCOVERY_ADVERTISEMENT_BYEBYE:
 	case UPNP_DISCOVERY_SEARCH_RESULT:
 		printf("discovery event: %d\n", type);
-		upnp_perror("discovery error code", devent->ErrCode);
-		printf("Expires     =  %d\n",  devent->Expires);
-		printf("DeviceId    =  %s\n",  devent->DeviceId);
-		printf("DeviceType  =  %s\n",  devent->DeviceType);
-		printf("ServiceType =  %s\n",  devent->ServiceType);
-		printf("ServiceVer  =  %s\n",  devent->ServiceVer);
-		printf("Location    =  %s\n",  devent->Location);
-		printf("OS          =  %s\n",  devent->Os);
-		printf("Ext         =  %s\n",  devent->Ext);
+		ithread_mutex_lock(&state_mutex);
+		/*
+		 * FIXME: We free and duplicate the same url for each
+		 * advertisement received, resulting in spurious wakeups of the
+		 * main thread
+		 */
+		free(camera_url);
+		camera_url = strdup(devent->Location);
+		ithread_cond_signal(&state_cond);
+		ithread_mutex_unlock(&state_mutex);
+		break;
+	case UPNP_DISCOVERY_ADVERTISEMENT_BYEBYE:
+		fprintf(stderr, "FIXME: camera disconnected\n");
 		break;
 	default:
 		fprintf(stderr, "unhandled client event: %d, %p, %p\n", type, event, cookie);
@@ -102,17 +105,75 @@ static const char *web_CameraConnectedMobile(void *data, const char *query)
 	return xml_CameraConnectedMobile;
 }
 
+static int ping_camera(const char *url)
+{
+	const char *cp;
+	char *url2, *p;
+	static const char *uuid;
+	static size_t uuid_len;
+	static const char path[] = "/desc_iml/MobileConnectedCamera.xml?uuid=";
+	size_t base_len, len;
+	char *outbuf, contenttype[LINE_SIZE];
+	int err;
+
+	/* Find the http://host:port part of the url */
+	cp = strstr(url, "://");
+	if (!cp) {
+		fprintf(stderr, "Invalid device URL: %s\n", url);
+		abort();
+		return -1;
+	}
+	cp += 3;
+	cp = strchr(cp, '/');
+	if (!cp)
+		cp = url + strlen(url);
+	base_len = cp - url;
+	if (base_len > 1024) {
+		fprintf(stderr, "Device URL too long: %s\n", url);
+		return -1;
+	}
+	if (!uuid) {
+		uuid = get_uuid();
+		if (strncmp(uuid, "uuid:", 5) == 0)
+			uuid += 5;
+		uuid_len = strlen(uuid);
+	}
+	/* paste baseurl + path + uuid */
+	len = base_len + sizeof(path) - 1 + uuid_len;
+	url2 = malloc(len + 1);
+	if (!url2) {
+		perror("Memory allocation failure");
+		return -1;
+	}
+	url2[len] = '\0';
+	memcpy(url2, url, cp - url);
+	p = url2 + (cp - url);
+	memcpy(p, path, sizeof(path) - 1);
+	p += sizeof(path) - 1;
+	memcpy(p, uuid, uuid_len);
+	fprintf(stderr, "url2: \"%s\"\n", url2);
+	outbuf = NULL;
+	err = UpnpDownloadUrlItem(url2, &outbuf, contenttype);
+	/* FIXME: Check that the XML contains what we expect */
+	free(outbuf);
+	if (err)
+		upnp_perror("UpnpDownloadUrlItem", err);
+	return err;
+}
+
 int wphoto_upnp_handshake(void)
 {
 	int ret = -1, err;
 	char descurl[256];
 	const char *desc_xml = "MobileDevDesc.xml";
 	struct timespec timer;
-	int camera_found_save, camera_responded_save;
+	int camera_responded_save;
+	const char *camera_url_save;
+	int pinged_camera;
 
 	ithread_mutex_init(&state_mutex, NULL);
 	ithread_cond_init(&state_cond, NULL);
-	camera_found = 0;
+	camera_url = NULL;
 	camera_responded = 0;
 	err = UpnpInit(NULL, 0);
 	if (err != UPNP_E_SUCCESS) {
@@ -161,7 +222,8 @@ int wphoto_upnp_handshake(void)
 	clock_gettime(CLOCK_REALTIME, &timer);
 	discovery_timeout = 1;
 	camera_responded_save = 0;
-	camera_found_save = 0;
+	camera_url_save = NULL;
+	pinged_camera = 0;
 	do {
 		int wait_err;
 
@@ -173,16 +235,25 @@ int wphoto_upnp_handshake(void)
 			}
 			printf("NOTIFY sent\n");
 		}
+		if (camera_url_save && !pinged_camera)
+			if (ping_camera(camera_url_save) == 0)
+				pinged_camera = 1;
 		timer.tv_sec += ADVERTISEMENT_INTERVAL;
 wait:
 		ithread_mutex_lock(&state_mutex);
 		wait_err = 0;
 		while (camera_responded == camera_responded_save &&
-				camera_found == camera_found_save &&
+				camera_url == camera_url_save &&
 				!discovery_timeout && wait_err == 0)
 			wait_err = ithread_cond_timedwait(
 					&state_cond, &state_mutex, &timer);
-		if (discovery_timeout) {
+		camera_responded_save = camera_responded;
+		camera_url_save = camera_url;
+		/*
+		 * Once we have the camera url, we stop sending M-SEARCH
+		 * requests
+		 */
+		if (discovery_timeout && !camera_url_save) {
 			err = UpnpSearchAsync(client_handle, MSEARCH_INTERVAL,
 					CAMERA_SERVICE_NAME, (void*)42);
 			if (err != UPNP_E_SUCCESS) {
@@ -190,15 +261,13 @@ wait:
 				goto err_register;
 			}
 			printf("M-SEARCH sent\n");
-			discovery_timeout = 0;
 		}
-		camera_responded_save = camera_responded;
-		camera_found_save = camera_found;
+		discovery_timeout = 0;
 		ithread_mutex_unlock(&state_mutex);
 		if (wait_err != ETIMEDOUT &&
-				(!camera_found_save || !camera_responded_save))
+				(!pinged_camera || !camera_responded_save))
 			goto wait;
-	} while (!camera_found_save || !camera_responded_save);
+	} while (!pinged_camera || !camera_responded_save);
 	return 0;
 err_register:
 	UpnpUnRegisterRootDevice(device_handle);
