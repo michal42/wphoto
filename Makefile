@@ -8,4 +8,7 @@ wphoto: wphoto.o upnp.o xml.o web.o uuid.o
 clean:
 	rm -f wphoto *.o
 
+%.o: %.c wphoto.h
+	$(CC) $(CFLAGS) -c -o $@ $<
+
 .PHONY: all clean
