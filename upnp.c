@@ -95,6 +95,10 @@ static const char *web_MobileDevDesc(void *data, const char *query)
 
 static const char *web_CameraConnectedMobile(void *data, const char *query)
 {
+	ithread_mutex_lock(&state_mutex);
+	camera_responded = 1;
+	ithread_cond_signal(&state_cond);
+	ithread_mutex_unlock(&state_mutex);
 	return xml_CameraConnectedMobile;
 }
 
@@ -160,12 +164,15 @@ int wphoto_upnp_handshake(void)
 	camera_found_save = 0;
 	do {
 		int wait_err;
-		err = UpnpSendAdvertisement(device_handle, 0);
-		if (err != UPNP_E_SUCCESS) {
-			printf("UpnpSendAdvertisement error: %d\n", err);
-			goto err_register;
+
+		if (!camera_responded_save) {
+			err = UpnpSendAdvertisement(device_handle, 0);
+			if (err != UPNP_E_SUCCESS) {
+				printf("UpnpSendAdvertisement error: %d\n", err);
+				goto err_register;
+			}
+			printf("NOTIFY sent\n");
 		}
-		printf("NOTIFY sent\n");
 		timer.tv_sec += ADVERTISEMENT_INTERVAL;
 wait:
 		ithread_mutex_lock(&state_mutex);
