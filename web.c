@@ -129,12 +129,12 @@ int web_start(void)
 
 	ret = UpnpEnableWebserver(TRUE);
 	if (ret != UPNP_E_SUCCESS) {
-		printf("UpnpEnableWebserver error: %d\n", ret);
+		upnp_perror("UpnpEnableWebserver", ret);
 		return 1;
 	}
 	ret = UpnpAddVirtualDir("/");
 	if (ret != UPNP_E_SUCCESS) {
-		printf("UpnpAddVirtualDir error: %d\n", ret);
+		upnp_perror("UpnpAddVirtualDir", ret);
 		return 1;
 	}
 	UpnpVirtualDir_set_GetInfoCallback(upnp_web_getinfo);

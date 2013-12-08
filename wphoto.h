@@ -5,6 +5,7 @@
 extern const char *server_ip, *device_uuid;
 extern int server_port;
 int wphoto_upnp_handshake(void);
+void upnp_perror(const char *message, int err);
 
 /* xml.c */
 extern char *xml_MobileDevDesc;

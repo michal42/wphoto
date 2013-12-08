@@ -30,7 +30,7 @@ int discovery_timeout;
 #define MSEARCH_INTERVAL 5
 #define CAMERA_SERVICE_NAME "urn:schemas-canon-com:service:MobileConnectedCameraService:1"
 
-static void upnp_perror(const char *message, int err)
+void upnp_perror(const char *message, int err)
 {
 	fprintf(stderr, "%s: %s (%d)\n", message, UpnpGetErrorMessage(err), err);
 };
