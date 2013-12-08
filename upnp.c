@@ -199,7 +199,7 @@ wait:
 				(!camera_found_save || !camera_responded_save))
 			goto wait;
 	} while (!camera_found_save || !camera_responded_save);
-	ret = 0;
+	return 0;
 err_register:
 	UpnpUnRegisterRootDevice(device_handle);
 err_init:
