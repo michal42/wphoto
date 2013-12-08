@@ -116,14 +116,14 @@ int wphoto_upnp_handshake(void)
 	camera_responded = 0;
 	err = UpnpInit(NULL, 0);
 	if (err != UPNP_E_SUCCESS) {
-		printf("UpnpInit error: %d\n", err);
+		upnp_perror("UpnpInit", err);
 		goto err_init;
 	}
 	server_ip = UpnpGetServerIpAddress();
 	server_port = UpnpGetServerPort();
 	device_uuid = get_uuid();
 	if (init_xml_docs() < 0) {
-		printf("init_xml_docs error");
+		perror("init_xml_docs");
 		goto err_init;
 	}
 
@@ -149,13 +149,13 @@ int wphoto_upnp_handshake(void)
 	err = UpnpRegisterRootDevice(descurl, upnp_device_event_handler,
 			&device_handle, &device_handle);
 	if (err != UPNP_E_SUCCESS) {
-		printf("UpnpRegisterRootDevice error: %d\n", err);
+		upnp_perror("UpnpRegisterRootDevice", err);
 		goto err_init;
 	}
 	err = UpnpRegisterClient(upnp_client_event_handler,
 			&client_handle, &client_handle);
 	if (err != UPNP_E_SUCCESS) {
-		printf("UpnpRegisterClient error: %d\n", err);
+		upnp_perror("UpnpRegisterClient", err);
 		goto err_register;
 	}
 	clock_gettime(CLOCK_REALTIME, &timer);
@@ -168,7 +168,7 @@ int wphoto_upnp_handshake(void)
 		if (!camera_responded_save) {
 			err = UpnpSendAdvertisement(device_handle, 0);
 			if (err != UPNP_E_SUCCESS) {
-				printf("UpnpSendAdvertisement error: %d\n", err);
+				upnp_perror("UpnpSendAdvertisement", err);
 				goto err_register;
 			}
 			printf("NOTIFY sent\n");
@@ -186,7 +186,7 @@ wait:
 			err = UpnpSearchAsync(client_handle, MSEARCH_INTERVAL,
 					CAMERA_SERVICE_NAME, (void*)42);
 			if (err != UPNP_E_SUCCESS) {
-				printf("UpnpSearchAsync error: %d\n", err);
+				upnp_perror("UpnpSearchAsync", err);
 				goto err_register;
 			}
 			printf("M-SEARCH sent\n");
