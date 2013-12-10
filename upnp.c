@@ -37,6 +37,14 @@ void upnp_perror(const char *message, int err)
 	fprintf(stderr, "%s: %s (%d)\n", message, UpnpGetErrorMessage(err), err);
 };
 
+/* strcmp() that accepts NULL pointers */
+static int strcmp_null(const char *s1, const char *s2)
+{
+	if (!s1 || !s2)
+		return !!s1 - !!s2;
+	return strcmp(s1, s2);
+}
+
 static int upnp_device_event_handler(Upnp_EventType type, void *event,
 		void *cookie)
 {
@@ -168,7 +176,7 @@ int wphoto_upnp_handshake(void)
 	const char *desc_xml = "MobileDevDesc.xml";
 	struct timespec timer;
 	int camera_responded_save;
-	const char *camera_url_save;
+	char *camera_url_save;
 	int pinged_camera;
 
 	ithread_mutex_init(&state_mutex, NULL);
@@ -243,12 +251,13 @@ wait:
 		ithread_mutex_lock(&state_mutex);
 		wait_err = 0;
 		while (camera_responded == camera_responded_save &&
-				camera_url == camera_url_save &&
+				strcmp_null(camera_url, camera_url_save) == 0 &&
 				!discovery_timeout && wait_err == 0)
 			wait_err = ithread_cond_timedwait(
 					&state_cond, &state_mutex, &timer);
 		camera_responded_save = camera_responded;
-		camera_url_save = camera_url;
+		free(camera_url_save);
+		camera_url_save = strdup(camera_url);
 		/*
 		 * Once we have the camera url, we stop sending M-SEARCH
 		 * requests
