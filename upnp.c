@@ -80,14 +80,11 @@ static int upnp_client_event_handler(Upnp_EventType type, void *event,
 	case UPNP_DISCOVERY_SEARCH_RESULT:
 		printf("discovery event: %d\n", type);
 		ithread_mutex_lock(&state_mutex);
-		/*
-		 * FIXME: We free and duplicate the same url for each
-		 * advertisement received, resulting in spurious wakeups of the
-		 * main thread
-		 */
-		free(camera_url);
-		camera_url = strdup(devent->Location);
-		ithread_cond_signal(&state_cond);
+		if (strcmp_null(camera_url, devent->Location) != 0) {
+			free(camera_url);
+			camera_url = strdup(devent->Location);
+			ithread_cond_signal(&state_cond);
+		}
 		ithread_mutex_unlock(&state_mutex);
 		break;
 	case UPNP_DISCOVERY_ADVERTISEMENT_BYEBYE:
@@ -256,8 +253,10 @@ wait:
 			wait_err = ithread_cond_timedwait(
 					&state_cond, &state_mutex, &timer);
 		camera_responded_save = camera_responded;
-		free(camera_url_save);
-		camera_url_save = strdup(camera_url);
+		if (strcmp_null(camera_url, camera_url_save) != 0) {
+			free(camera_url_save);
+			camera_url_save = strdup(camera_url);
+		}
 		/*
 		 * Once we have the camera url, we stop sending M-SEARCH
 		 * requests
