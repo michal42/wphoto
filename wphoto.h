@@ -2,7 +2,7 @@
 #define _WPHOTO_H
 
 /* upnp.c */
-extern const char *server_ip, *device_uuid;
+extern const char *server_ip;
 extern int server_port;
 int wphoto_upnp_handshake(void);
 void upnp_perror(const char *message, int err);

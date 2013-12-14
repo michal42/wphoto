@@ -111,8 +111,8 @@ int init_xml_docs(void)
 "<manufacturerURL>http://michal.markovi.net/</manufacturerURL>\n"
 "<modelDescription>wphoto</modelDescription>\n"
 "<modelName>n/a</modelName>\n"
-"<UDN>");
-	AP(device_uuid);
+"<UDN>uuid:");
+	AP(get_uuid());
 	AP(
 "</UDN>\n"
 "<serviceList>\n"

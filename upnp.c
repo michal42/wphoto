@@ -10,7 +10,7 @@
 
 #include "wphoto.h"
 
-const char *server_ip, *device_uuid;
+const char *server_ip;
 int server_port;
 static UpnpDevice_Handle device_handle = -1;
 static UpnpClient_Handle client_handle = -1;
@@ -139,8 +139,6 @@ static int ping_camera(const char *url)
 	}
 	if (!uuid) {
 		uuid = get_uuid();
-		if (strncmp(uuid, "uuid:", 5) == 0)
-			uuid += 5;
 		uuid_len = strlen(uuid);
 	}
 	/* paste baseurl + path + uuid */
@@ -187,7 +185,6 @@ int wphoto_upnp_handshake(void)
 	}
 	server_ip = UpnpGetServerIpAddress();
 	server_port = UpnpGetServerPort();
-	device_uuid = get_uuid();
 	if (init_xml_docs() < 0) {
 		perror("init_xml_docs");
 		goto err_init;
