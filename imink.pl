@@ -3,10 +3,9 @@
 use strict;
 use warnings;
 
-package IminkServer;
+use HTTP::Daemon;
+use HTTP::Response;
 
-use HTTP::Server::Simple::CGI;
-use base qw(HTTP::Server::Simple::CGI);
 
 my $resp_capabilityinfo = "";
 my $resp_objrecvcapability =
@@ -44,64 +43,67 @@ sub send_resp {
 }
 
 sub handle_request {
-	my $self = shift;
-	my $cgi  = shift;
+	my ($client, $req) = @_;
+	my $uri = $req->uri;
   
-	(my $path = $cgi->path_info()) =~ s:/+:/:g;
+	(my $path = $uri->path) =~ s:/+:/:g;
 	my $handler = $dispatch{$path};
 
-	my @params = sort($cgi->url_param());
-	my $qs = "?";
-	$qs .= "$_=" . $cgi->url_param($_) . "&" for @params;
 	if (defined($handler)) {
-		print STDERR "Handle: $path$qs\n";
+		print STDERR "Handle: " . $uri->path_query . "\n";
 		if (ref($handler) eq "CODE") {
-			$handler->($cgi);
+			$handler->($client, $req);
 		} else {
-			send_resp($cgi, 200,
-				-type => "text/xml; charset=utf-8", $handler);
+			my $res = HTTP::Response->new(200);
+			$res->header("Content-type", "text/xml; charset=utf-8");
+			$res->content($handler);
+			$client->send_response($res);
 		}
 	} else {
-		print STDERR "Unhandled: $path$qs\n";
-		send_resp($cgi, 404, $cgi->start_html('Not found') .
-			  $cgi->h1('Not found') .
-			  $cgi->end_html);
+		print STDERR "Unhandled: " . $uri->path_query . "\n";
+		$client->send_error(404, "Not found");
 	}
 }
 
 sub resp_usecasestatus {
-	my $cgi  = shift;   # CGI.pm object
-	return if !ref $cgi;
+	my ($client, $req) = @_;
 	
-	my $post = $cgi->param('POSTDATA') || "";
+	my $content = $req->content;
 	my $status = "Stop";
-	if ($post =~ m:<Status>Run</Status>:) {
+	if ($content =~ m:<Status>Run</Status>:) {
 		$status = "Run";
 	}
 	print STDERR "Status: $status\n";
-	my $res =
+	my $xml =
 "<?xml version=\"1.0\"?>
 <ResultSet xmlns=\"urn:schemas-canon-com:service:CameraConnectedMobileService:1\">
   <Status>$status</Status>
   <MajorVersion>0</MajorVersion>
   <MinorVersion>1</MinorVersion>
 </ResultSet>";
-	send_resp($cgi, 200, -type => "text/xml; charset=utf-8", $res);
+	my $res = HTTP::Response->new(200);
+	$res->header("Content-type", "text/xml; charset=utf-8");
+	$res->content($xml);
+	$client->send_response($res);
 }
 
 my $objcounter = 0;
 sub resp_sendobjinfo {
-	my $cgi  = shift;
-	return if !ref $cgi;
+	my ($client, $req) = @_;
 
-	my $post = $cgi->param('POSTDATA') || "None";
+	my $content = $req->content;
 	my $fname = "postobj_$objcounter";
 	$objcounter++;
 	open(my $fh, '>', $fname) or die "$fname: $!\n";
 	print STDERR "> $fname\n";
-	print $fh $post;
-	send_resp($cgi, 200, "");
+	print $fh $content;
+	$client->send_status_line(200);
 }
 
 
-my $pid = IminkServer->new(8615)->run();
+my $server = HTTP::Daemon->new(LocalPort => 8615, ReuseAddr => 1) or die "Cannot create a HTTP Daemon instance: $!\n";
+while (my $client = $server->accept) {
+	my $req = $client->get_request;
+	handle_request($client, $req);
+	$client->close;
+}
