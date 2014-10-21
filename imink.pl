@@ -5,6 +5,9 @@ use warnings;
 
 use HTTP::Daemon;
 use HTTP::Response;
+use Email::MIME;
+use URI::QueryParam;
+use Fcntl qw(:seek);
 
 
 my $resp_capabilityinfo = "";
@@ -20,7 +23,7 @@ my %dispatch = (
 	'/CameraConnectedMobile/UsecaseStatus' => \&resp_usecasestatus,
 	'/CameraConnectedMobile/ObjRecvCapability' => $resp_objrecvcapability,
 	'/CameraConnectedMobile/SendObjInfo' => \&resp_sendobjinfo,
-	'/CameraConnectedMobile/ObjData' => \&resp_sendobjinfo,
+	'/CameraConnectedMobile/ObjData' => \&resp_objdata,
 );
 
 my %codes = (
@@ -52,7 +55,13 @@ sub handle_request {
 	if (defined($handler)) {
 		print STDERR "Handle: " . $uri->path_query . "\n";
 		if (ref($handler) eq "CODE") {
-			$handler->($client, $req);
+			eval {
+				$handler->($client, $req);
+			};
+			if ($@) {
+				print STDERR $@;
+				$client->send_error();
+			}
 		} else {
 			my $res = HTTP::Response->new(200);
 			$res->header("Content-type", "text/xml; charset=utf-8");
@@ -67,7 +76,7 @@ sub handle_request {
 
 sub resp_usecasestatus {
 	my ($client, $req) = @_;
-	
+
 	my $content = $req->content;
 	my $status = "Stop";
 	if ($content =~ m:<Status>Run</Status>:) {
@@ -87,16 +96,78 @@ sub resp_usecasestatus {
 	$client->send_response($res);
 }
 
-my $objcounter = 0;
 sub resp_sendobjinfo {
 	my ($client, $req) = @_;
 
-	my $content = $req->content;
-	my $fname = "postobj_$objcounter";
-	$objcounter++;
+	# thumbnail ignored
+	$client->send_status_line(200);
+}
+
+my %fragments;
+sub resp_objdata {
+	my ($client, $req) = @_;
+
+	my $params = $req->uri->query_form_hash;
+	for my $p (qw(ObjID Offset TotalSize SendSize)) {
+		if (!exists($params->{$p})) {
+			die "error: Required parameter $p is missing\n";
+		}
+	}
+	if ($params->{ObjID} !~ /^[a-zA-Z0-9]+$/) {
+		die "error: Illegal ObjID: $params->{ObjID}\n";
+	}
+	if (exists($params->{ObjType}) && $params->{ObjType} !~ /^[a-zA-Z0-9]+$/) {
+		die "error: Illegal ObjType for ObjID $params->{ObjID}: $params->{ObjID}\n";
+	}
+	if (!exists($fragments{$params->{ObjID}})) {
+		$fragments{$params->{ObjID}} = {
+			size => $params->{TotalSize},
+			fragments => {},
+		};
+	}
+	my $obj = $fragments{$params->{ObjID}};
+	if ($obj->{size} != $params->{TotalSize}) {
+		print STDERR "warning: Size of ObjID $params->{ObjID} changed from $obj->{size} to $params->{TotalSize}\n";
+		$obj->{size} = $params->{TotalSize};
+	}
+	my $str = $req->as_string;
+	my $mime = Email::MIME->new($str);
+	my $data;
+	for my $p ($mime->subparts) {
+		next unless $p->content_type =~ m:application/octet-stream.*Object-ID:;
+		$data = $p->body;
+	}
+	if (!$data) {
+		die "error: No data found for ObjID $params->{ObjID}\n";
+	}
+	my $offset = $params->{Offset};
+	if (exists($obj->{fragments}{$offset})) {
+		print STDERR "warning: overwriting data at offset $offset for ObjID $params->{ObjID}\n";
+	}
+	$obj->{fragments}{$offset} = [$params->{SendSize}, $data];
+
+	# Now check if we have the complete object
+	# FIXME: Handle overlapping fragments
+	my $idx = 0;
+	while (exists($obj->{fragments}{$idx})) {
+		$idx += $obj->{fragments}{$idx}[0];
+	}
+	if ($idx < $obj->{size}) {
+		$client->send_status_line(200);
+		return;
+	}
+	if ($idx > $obj->{size}) {
+		print STDERR "warning: ObjID $params->{ObjID} bigger than advertized size ($idx vs. $obj->{size}\n";
+	}
+	my $fname = $params->{ObjID} . "." . (lc $params->{ObjType} || "jpg");
+	print STDERR "Storing $fname\n";
 	open(my $fh, '>', $fname) or die "$fname: $!\n";
-	print STDERR "> $fname\n";
-	print $fh $content;
+	for my $i (sort { $a <=> $b } keys(%{$obj->{fragments}})) {
+		sysseek($fh, $i, SEEK_SET);
+		syswrite($fh, $obj->{fragments}{$i}[1],
+			$obj->{fragments}{$i}[0], 0);
+	}
+	close($fh);
 	$client->send_status_line(200);
 }
 
