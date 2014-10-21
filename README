@@ -1,0 +1,31 @@
+This is a test program to receive photos from a WiFi-enabled Canon PowerShot
+S120 (and, with some luck, also other models). It has been made by
+reverse engineering the network traffic when using the CameraWindow
+Android application.
+
+The program consists of two parts: 'wphoto' arranges fro the UPnP
+discovery of the camera and the computer. 'imink.pl' does the actual
+image transfer. Transfers must be initiated by the camera currently. To
+build 'wphoto', you will need the libupnp library
+(http://pupnp.sourceforge.net/). The 'imink.pl' requires a few perl
+modules:
+
+	HTTP::Daemon;
+	HTTP::Response;
+	Email::MIME;
+	URI::QueryParam;
+
+These should be pretty standard.
+
+Usage
+~~~~~
+Connect your camera and your machine to the same subnet. Make sure that
+ports 49152 (UPnP) and 8615 (imink) are open. Start 'wphoto' and
+'imink.pl' simultaneously. Start WiFi on the camera. After connecting
+to the AP, you should see your computer's hostname as an option. Connect
+to it and send some images. If all goes well, 'imink.pl' will save the
+images to the current directory.
+
+Bugs
+~~~~
+There are many. This is just a test program.
